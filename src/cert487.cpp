@@ -1,0 +1,114 @@
+#include "cert487.hpp"
+#include "io.hpp"
+
+#include <sstream>
+#include <stdexcept>
+#include <algorithm>
+
+namespace pki487 {
+
+static std::string field(const std::string& k, const std::string& v) {
+    return k + ": " + v + "\n";
+}
+
+std::string Cert487::serialize_tbs() const {
+    std::ostringstream ss;
+    ss << "-----BEGIN CERT487-----\n";
+    ss << field("VERSION", std::to_string(version));
+    ss << field("SERIAL", std::to_string(serial));
+    ss << field("SIGNATURE-ALGO", signature_algo);
+    ss << field("ISSUER", issuer);
+    ss << field("SUBJECT", subject);
+    ss << field("NOT-BEFORE", std::to_string(not_before));
+    ss << field("NOT-AFTER", std::to_string(not_after));
+    ss << field("TRUST-LEVEL", std::to_string(trust_level));
+    ss << "SUBJECT-PUBKEY-PEM: BEGIN\n";
+    std::string pem = subject_pubkey_pem;
+    if (!pem.empty() && pem.back() != '\n') pem.push_back('\n');
+    ss << pem;
+    ss << "SUBJECT-PUBKEY-PEM: END\n";
+    ss << "-----END TBS-----\n";
+    return canonicalize_newlines(ss.str());
+}
+
+std::string Cert487::serialize_full() const {
+    std::ostringstream ss;
+    ss << serialize_tbs();
+    ss << field("SIGNATURE", signature_b64);
+    ss << "-----END CERT487-----\n";
+    return ss.str();
+}
+
+Cert487 Cert487::parse(const std::string& text) {
+    Cert487 c;
+    auto canon = canonicalize_newlines(text);
+    // Extract TBS block
+    auto begin = canon.find("-----BEGIN CERT487-----\n");
+    if (begin == std::string::npos) throw std::runtime_error("Missing BEGIN CERT487");
+    auto tbs_end = canon.find("-----END TBS-----\n", begin);
+    if (tbs_end == std::string::npos) throw std::runtime_error("Missing END TBS");
+    std::string tbs = canon.substr(begin, tbs_end - begin + std::string("-----END TBS-----\n").size());
+
+    // After TBS, expect SIGNATURE and END CERT487
+    auto sig_pos = canon.find("SIGNATURE:", tbs_end);
+    if (sig_pos == std::string::npos) throw std::runtime_error("Missing SIGNATURE field");
+    auto sig_end_line = canon.find('\n', sig_pos);
+    std::string sig_line = canon.substr(sig_pos, sig_end_line - sig_pos);
+    auto colon = sig_line.find(':');
+    if (colon == std::string::npos) throw std::runtime_error("Bad SIGNATURE line");
+    // Extract value after ':' and possible space
+    {
+        std::string tmp = sig_line.substr(colon+1);
+        // trim leading spaces
+        size_t p = 0; while (p < tmp.size() && (tmp[p] == ' ' || tmp[p] == '\t')) ++p;
+        tmp = tmp.substr(p);
+        c.signature_b64 = trim(tmp);
+    }
+
+    auto cert_end = canon.find("-----END CERT487-----\n", sig_end_line);
+    if (cert_end == std::string::npos) throw std::runtime_error("Missing END CERT487");
+
+    // Parse fields inside TBS
+    auto rest = tbs;
+    auto get_value = [&](const std::string& key) -> std::string {
+        auto pos = rest.find(key + ": ");
+        if (pos == std::string::npos) throw std::runtime_error("Missing field: " + key);
+        auto line_end = rest.find('\n', pos);
+        if (line_end == std::string::npos) throw std::runtime_error("Malformed field: " + key);
+        auto val = rest.substr(pos + key.size() + 2, line_end - (pos + key.size() + 2));
+        return val;
+    };
+
+    auto s_version = get_value("VERSION");
+    auto s_serial = get_value("SERIAL");
+    auto s_sigalg = get_value("SIGNATURE-ALGO");
+    c.version = std::stoi(s_version);
+    c.serial = std::stoll(s_serial);
+    c.signature_algo = s_sigalg;
+    c.issuer = get_value("ISSUER");
+    c.subject = get_value("SUBJECT");
+    c.not_before = std::stoll(get_value("NOT-BEFORE"));
+    c.not_after = std::stoll(get_value("NOT-AFTER"));
+    c.trust_level = std::stoi(get_value("TRUST-LEVEL"));
+
+    // Subject pubkey PEM block between markers
+    auto pem_begin_key = std::string("SUBJECT-PUBKEY-PEM: BEGIN\n");
+    auto pem_end_key = std::string("SUBJECT-PUBKEY-PEM: END\n");
+    auto pb = rest.find(pem_begin_key);
+    if (pb == std::string::npos) throw std::runtime_error("Missing SUBJECT-PUBKEY-PEM: BEGIN");
+    pb += pem_begin_key.size();
+    auto pe = rest.find(pem_end_key, pb);
+    if (pe == std::string::npos) throw std::runtime_error("Missing SUBJECT-PUBKEY-PEM: END");
+    c.subject_pubkey_pem = rest.substr(pb, pe - pb);
+
+    // Validate trust level range
+    if (c.trust_level < 0 || c.trust_level > 7) throw std::runtime_error("TRUST-LEVEL out of range (0..7)");
+
+    return c;
+}
+
+bool cert_is_time_valid(const Cert487& c, long long t) {
+    return t >= c.not_before && t <= c.not_after;
+}
+
+} // namespace pki487

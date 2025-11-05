@@ -1,0 +1,9 @@
+build/
+*.obj
+*.pdb
+*.exe
+*.user
+*.VC.db
+CMakeFiles/
+CMakeCache.txt
+*.log
