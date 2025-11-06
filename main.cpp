@@ -54,7 +54,6 @@ static void cmd_issue_cert() {
     // Use exponent modulo 1024 (equivalent to low 10 bits) to derive key
     std::bitset<10> signing_key(static_cast<unsigned long long>(rsa.privateKey.exponent % 1024u));
     hasher.setKey(signing_key);
-    hasher.setKey(std::bitset<10>("1010101010")); // example fixed key
     std::vector<std::bitset<8>> blocks;
     blocks.reserve(tbs.size());
     for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
@@ -188,10 +187,10 @@ static void cmd_verify_crl(const std::vector<std::string>& args) {
     std::string issuer_pub_n_str = prompt("Issuer public N (int, numeric)", std::string());
     std::string issuer_pub_exp_str = prompt("Issuer public exponent (int)", std::string());
     if (issuer_pub_n_str.empty() || issuer_pub_exp_str.empty()) throw std::runtime_error("Issuer public key details required for CRL verification");
-    uint32_t issuer_pub_n = static_cast<uint32_t>(std::stoul(issuer_pub_n_str));
-    uint32_t issuer_pub_exp = static_cast<uint32_t>(std::stoul(issuer_pub_exp_str));
-    std::bitset<10> verify_key(static_cast<unsigned long long>(issuer_pub_exp % 1024u));
-    hasher.setKey(verify_key);
+        uint32_t issuer_pub_n = static_cast<uint32_t>(std::stoul(issuer_pub_n_str));
+        uint32_t issuer_pub_exp = static_cast<uint32_t>(std::stoul(issuer_pub_exp_str));
+        std::bitset<10> verify_key(static_cast<unsigned long long>(issuer_pub_exp % 1024u));
+        hasher.setKey(verify_key);
         std::vector<std::bitset<8>> blocks;
         blocks.reserve(tbs.size());
         for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
@@ -241,7 +240,6 @@ int main(int argc, char** argv) {
         if (args.empty()) {
             std::cout << "pki487 <command> [options]\n";
             std::cout << "Commands:\n";
-        // keygen removed; issue-cert now performs key generation automatically.
             std::cout << "  issue-cert\n";
             std::cout << "  verify-cert --cert file --issuer-pub file [--pki-time file] [--min-tl n]\n";
             std::cout << "  gen-crl\n";
