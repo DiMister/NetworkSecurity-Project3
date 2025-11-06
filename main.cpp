@@ -3,7 +3,6 @@
 #include "./include/cert487.hpp"
 #include "./include/crl487.hpp"
 #include "./include/Rsa.hpp"
-#include "./include/crypto.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -161,7 +160,7 @@ static void cmd_verify_crl(const std::vector<std::string>& args) {
 
     bool sig_ok = false;
     if (crl.signature_algo == "S-DES-CBC-8") {
-        
+
     }
 
     long long now = read_pki_time(time_path);
