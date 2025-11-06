@@ -38,6 +38,10 @@ Run:
 .\pki487.exe
 ```
 
+### Mac (Clang)
+
+
+
 ## Usage Examples
 
 Set PKI system time:
