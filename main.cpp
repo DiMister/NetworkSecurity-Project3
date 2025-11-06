@@ -79,13 +79,13 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
 
     auto cert_txt = read_text_file(cert_path);
     auto cert = Cert487::parse(cert_txt);
-    auto pub = load_public_key_pem(issuer_pub_path);
+    auto pub = cert.subject_pubkey_pem;
 
     std::string tbs = cert.serialize_tbs();
     auto sig = base64_decode(cert.signature_b64);
 
     bool sig_ok = false;
-    if (cert.signature_algo == "SHA256withRSA") {
+    if (cert.signature_algo == "S-DES-CBC-8") {
         sig_ok = verify_sha256_rsa(pub.get(), tbs, sig);
     }
     long long now = read_pki_time(time_path);
@@ -111,7 +111,6 @@ static void cmd_gen_crl() {
     std::vector<long long> revoked;
 
     // Always prompt the user for these values (no command-line args parsed here)
-    issuer_priv_path = prompt("Issuer private key (PEM)", issuer_priv_path);
     issuer = prompt("Issuer name", issuer);
     this_update = std::stoll(prompt("This-Update (int)", std::to_string(this_update)));
     next_update = std::stoll(prompt("Next-Update (int)", std::to_string(next_update)));
@@ -122,8 +121,6 @@ static void cmd_gen_crl() {
     for (auto &x : split(s, ',', false)) {
         auto t = trim(x); if (!t.empty()) revoked.push_back(std::stoll(t));
     }
-
-    auto issuer_priv = load_private_key_pem(issuer_priv_path);
 
     Crl487 crl;
     crl.version = 1;
@@ -149,27 +146,24 @@ static void cmd_gen_crl() {
 
 static void cmd_verify_crl(const std::vector<std::string>& args) {
     std::string crl_path;
-    std::string issuer_pub_path;
     std::string time_path = PKI_TIME_FILE;
     for (size_t i=0;i<args.size();++i) {
         if (args[i]=="--crl" && i+1<args.size()) crl_path=args[i+1], ++i;
-        else if (args[i]=="--issuer-pub" && i+1<args.size()) issuer_pub_path=args[i+1], ++i;
         else if (args[i]=="--pki-time" && i+1<args.size()) time_path=args[i+1], ++i;
     }
     if (crl_path.empty()) crl_path = prompt("CRL path");
-    if (issuer_pub_path.empty()) issuer_pub_path = prompt("Issuer public key (PEM)");
 
     auto crl_txt = read_text_file(crl_path);
     auto crl = Crl487::parse(crl_txt);
-    auto pub = load_public_key_pem(issuer_pub_path);
 
     std::string tbs = crl.serialize_tbs();
     auto sig = base64_decode(crl.signature_b64);
 
     bool sig_ok = false;
-    if (crl.signature_algo == "SHA256withRSA") {
-        sig_ok = verify_sha256_rsa(pub.get(), tbs, sig);
+    if (crl.signature_algo == "S-DES-CBC-8") {
+        
     }
+
     long long now = read_pki_time(time_path);
     bool time_ok = crl_time_valid(crl, now);
 
