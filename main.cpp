@@ -11,6 +11,8 @@
 
 using namespace pki487;
 
+const std::string PKI_TIME_FILE = "pki_time.txt";
+
 static void Keygen(const std::vector<std::string>& args) {
     Rsa rsa = Rsa();
 }
@@ -52,7 +54,7 @@ static void cmd_issue_cert(const std::vector<std::string>& args) {
 
     Cert487 cert;
     cert.version = 1;
-    cert.signature_algo = "SHA256withRSA";
+    cert.signature_algo = "S-DES-CBC-8";
     cert.serial = serial;
     cert.issuer = issuer;
     cert.subject = subject;
@@ -62,7 +64,13 @@ static void cmd_issue_cert(const std::vector<std::string>& args) {
     cert.subject_pubkey_pem = subject_pub_pem;
 
     std::string tbs = cert.serialize_tbs();
-    auto sig = sign_sha256_rsa(issuer_priv.get(), tbs);
+    // Compute 8-bit CBC hash over TBS using S-DES CBC
+    CBCHash hasher; // default key and IV
+    std::vector<std::bitset<8>> blocks;
+    blocks.reserve(tbs.size());
+    for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
+    auto h = hasher.hash(blocks);
+    std::vector<unsigned char> sig = { static_cast<unsigned char>(h.to_ulong()) };
     cert.signature_b64 = base64_encode(sig);
 
     ensure_dir("certs");
@@ -73,7 +81,7 @@ static void cmd_issue_cert(const std::vector<std::string>& args) {
 static void cmd_verify_cert(const std::vector<std::string>& args) {
     std::string cert_path;
     std::string issuer_pub_path;
-    std::string time_path = "pki_time.txt";
+    std::string time_path = PKI_TIME_FILE;
     int min_trust = -1;
     for (size_t i=0;i<args.size();++i) {
         if (args[i]=="--cert" && i+1<args.size()) cert_path=args[i+1], ++i;
@@ -91,7 +99,16 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
     std::string tbs = cert.serialize_tbs();
     auto sig = base64_decode(cert.signature_b64);
 
-    bool sig_ok = verify_sha256_rsa(pub.get(), tbs, sig);
+    bool sig_ok = false;
+    if (cert.signature_algo == "S-DES-CBC-8") {
+        CBCHash hasher;
+        std::vector<std::bitset<8>> blocks;
+        blocks.reserve(tbs.size());
+        for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
+        auto h = hasher.hash(blocks);
+        std::vector<unsigned char> expected = { static_cast<unsigned char>(h.to_ulong()) };
+        sig_ok = (sig == expected);
+    }
     long long now = read_pki_time(time_path);
     bool time_ok = cert_is_time_valid(cert, now);
     bool tl_ok = (min_trust < 0) || (cert.trust_level >= min_trust);
@@ -144,14 +161,19 @@ static void cmd_gen_crl(const std::vector<std::string>& args) {
 
     Crl487 crl;
     crl.version = 1;
-    crl.signature_algo = "SHA256withRSA";
+    crl.signature_algo = "S-DES-CBC-8";
     crl.issuer = issuer;
     crl.this_update = this_update;
     crl.next_update = next_update;
     crl.revoked_serials = revoked;
 
     std::string tbs = crl.serialize_tbs();
-    auto sig = sign_sha256_rsa(issuer_priv.get(), tbs);
+    CBCHash hasher;
+    std::vector<std::bitset<8>> blocks;
+    blocks.reserve(tbs.size());
+    for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
+    auto h = hasher.hash(blocks);
+    std::vector<unsigned char> sig = { static_cast<unsigned char>(h.to_ulong()) };
     crl.signature_b64 = base64_encode(sig);
 
     ensure_dir("crls");
@@ -162,7 +184,7 @@ static void cmd_gen_crl(const std::vector<std::string>& args) {
 static void cmd_verify_crl(const std::vector<std::string>& args) {
     std::string crl_path;
     std::string issuer_pub_path;
-    std::string time_path = "pki_time.txt";
+    std::string time_path = PKI_TIME_FILE;
     for (size_t i=0;i<args.size();++i) {
         if (args[i]=="--crl" && i+1<args.size()) crl_path=args[i+1], ++i;
         else if (args[i]=="--issuer-pub" && i+1<args.size()) issuer_pub_path=args[i+1], ++i;
@@ -178,7 +200,16 @@ static void cmd_verify_crl(const std::vector<std::string>& args) {
     std::string tbs = crl.serialize_tbs();
     auto sig = base64_decode(crl.signature_b64);
 
-    bool sig_ok = verify_sha256_rsa(pub.get(), tbs, sig);
+    bool sig_ok = false;
+    if (crl.signature_algo == "S-DES-CBC-8") {
+        CBCHash hasher;
+        std::vector<std::bitset<8>> blocks;
+        blocks.reserve(tbs.size());
+        for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
+        auto h = hasher.hash(blocks);
+        std::vector<unsigned char> expected = { static_cast<unsigned char>(h.to_ulong()) };
+        sig_ok = (sig == expected);
+    }
     long long now = read_pki_time(time_path);
     bool time_ok = crl_time_valid(crl, now);
 
@@ -202,7 +233,7 @@ static void cmd_is_revoked(const std::vector<std::string>& args) {
 }
 
 static void cmd_pki_time(const std::vector<std::string>& args) {
-    std::string file = "pki_time.txt";
+    std::string file = PKI_TIME_FILE;
     if (!args.empty() && args[0] == "show") {
         std::cout << read_pki_time(file) << "\n";
     } else if (!args.empty() && args[0] == "set") {
