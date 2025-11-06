@@ -1,40 +1,54 @@
-// hash_driver.cpp
-#include "./Helpers/SDESModes.h"
+// CBCHash implementation and small CLI demo
+#include "CBCHash.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
-#include <bitset>
 
-int main(int argc, char* argv[]) {
-    std::bitset<10> hash_key("1000000000");
-    if (argc >= 2) {
-        hash_key = std::bitset<10>(std::string(argv[1]));
+CBCHash::CBCHash(const std::bitset<10>& key, const std::bitset<8>& iv)
+    : key_(key), iv_(iv), sdes_(key) {}
+
+void CBCHash::setKey(const std::bitset<10>& key) {
+    key_ = key;
+    // Reinitialize SDESModes with new key
+    sdes_ = SDESModes(key_);
+}
+
+std::bitset<10> CBCHash::getKey() const { return key_; }
+
+void CBCHash::setIV(const std::bitset<8>& iv) { iv_ = iv; }
+
+std::bitset<8> CBCHash::getIV() const { return iv_; }
+
+std::bitset<8> CBCHash::hash(const std::vector<std::bitset<8>>& blocks) {
+    if (blocks.empty()) {
+        // For empty input return IV as a sensible default
+        return iv_;
     }
 
-    std::cout << "Using S-DES key for hashing: " << hash_key << " (" << hash_key.to_ulong() << ")\n";
+    auto ct = sdes_.encrypt(blocks, EncryptionMode::CBC, iv_);
+    if (ct.empty()) return std::bitset<8>(0);
+    return ct.back();
+}
 
-    // Fixed key for hashing (all hash functions use fixed key)
-    SDESModes sdes(hash_key);
-    
-    // Fixed IV for consistency
-    std::bitset<8> iv("00000000");
-        
-    std::cout << "S-DES CBC Hash Function Demo\n";
-    std::cout << "============================\n";
-    
-    while (true) {
-        std::cout << "Enter input string (or 'quit' to exit): ";
-        std::vector<std::bitset<8>> input;
-        std::string temp;
-        std::getline(std::cin, temp);
-        if (temp == "quit") break;
-        for (char c : temp) {
-            input.push_back(std::bitset<8>(c));
+std::bitset<8> CBCHash::hash(const std::vector<bool>& bits) {
+    // Convert dynamic-size bit vector into 8-bit blocks (LSB-first within each byte)
+    std::size_t totalBits = bits.size();
+    std::size_t numBlocks = (totalBits + 7) / 8;
+    std::vector<std::bitset<8>> blocks;
+    blocks.reserve(numBlocks);
+
+    for (std::size_t i = 0; i < numBlocks; ++i) {
+        std::bitset<8> b(0);
+        for (std::size_t bit = 0; bit < 8; ++bit) {
+            std::size_t idx = i * 8 + bit; // bit 0 is LSB
+            if (idx < totalBits) {
+                b[bit] = bits[idx];
+            } else {
+                b[bit] = 0;
+            }
         }
-        std::cout << "Input: " << temp << "\n";
-        auto hash = sdes.encrypt(input, EncryptionMode::CBC, iv).back();
-        std::cout << "Hash:  " << hash << " (" << hash.to_ulong() << ")\n\n";
+        blocks.push_back(b);
     }
-    
-    return 0;
+
+    return hash(blocks);
 }
