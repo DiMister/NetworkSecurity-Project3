@@ -18,8 +18,8 @@ const std::string PKI_TIME_FILE = "pki_time.txt";
 
 // Key generation is now integrated into certificate issuance; we keep no standalone keygen.
 
-static void cmd_issue_cert(const std::vector<std::string>& cli_args) {
-    Rsa rsa = new Rsa();
+static void cmd_issue_cert() {
+    Rsa rsa = Rsa();
 
     // Integrated key generation step: will generate issuer/subject keypairs if paths not supplied.
     std::string out_path = "certs/cert.cert487";
@@ -28,20 +28,6 @@ static void cmd_issue_cert(const std::vector<std::string>& cli_args) {
     int trust = 0;
     std::string issuer, subject;
 
-    // First parse any provided CLI arguments (so we don't overwrite user-provided paths by generating new ones unnecessarily)
-    for (size_t i=0;i<cli_args.size();++i) {
-        if (cli_args[i]=="--out" && i+1<cli_args.size()) out_path=cli_args[i+1], ++i;
-        else if (cli_args[i]=="--serial" && i+1<cli_args.size()) serial=std::stoll(cli_args[i+1]), ++i;
-        else if (cli_args[i]=="--issuer" && i+1<cli_args.size()) issuer=cli_args[i+1], ++i;
-        else if (cli_args[i]=="--subject" && i+1<cli_args.size()) subject=cli_args[i+1], ++i;
-        else if (cli_args[i]=="--not-before" && i+1<cli_args.size()) not_before=std::stoll(cli_args[i+1]), ++i;
-        else if (cli_args[i]=="--not-after" && i+1<cli_args.size()) not_after=std::stoll(cli_args[i+1]), ++i;
-        else if (cli_args[i]=="--trust" && i+1<cli_args.size()) trust=std::stoi(cli_args[i+1]), ++i;
-    }
-
-    // Prompt for any remaining fields
-    issuer_priv_path = prompt("Issuer private key (PEM)", issuer_priv_path);
-    subject_pub_path = prompt("Subject public key (PEM)", subject_pub_path);
     issuer = prompt("Issuer name", issuer);
     subject = prompt("Subject name", subject);
     serial = std::stoll(prompt("Serial", std::to_string(serial)));
@@ -60,7 +46,7 @@ static void cmd_issue_cert(const std::vector<std::string>& cli_args) {
     cert.not_before = not_before;
     cert.not_after = not_after;
     cert.trust_level = trust;
-    cert.subject_pubkey_pem = ;
+    cert.subject_pubkey_pem = rsa.publicKey;
 
     std::string tbs = cert.serialize_tbs();
     // Compute 8-bit CBC hash over TBS using S-DES CBC
@@ -236,7 +222,7 @@ int main(int argc, char** argv) {
         }
         std::string cmd = args[0];
         std::vector<std::string> rest(args.begin()+1, args.end());
-    if (cmd == "issue-cert") cmd_issue_cert(rest);
+    if (cmd == "issue-cert") cmd_issue_cert();
         else if (cmd == "verify-cert") cmd_verify_cert(rest);
         else if (cmd == "gen-crl") cmd_gen_crl();
         else if (cmd == "verify-crl") cmd_verify_crl(rest);

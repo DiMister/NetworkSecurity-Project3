@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include "Rsa.hpp"
 
 namespace pki487 {
 
@@ -14,7 +15,7 @@ struct Cert487 {
     long long not_before = 0;        // integer time
     long long not_after = 0;         // integer time
     int trust_level = 0;             // 0..7
-    std::string subject_pubkey_pem;  // PEM block
+    keypair subject_pubkey_pem;  // PEM block
 
     // signature base64 (over TBS canonical text)
     std::string signature_b64;
