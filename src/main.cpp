@@ -29,7 +29,7 @@ static void cmd_keygen(const std::vector<std::string>& args) {
     std::cout << "Generated keypair: " << out << "_[priv|pub].pem\n";
 }
 
-static void cmd_issue_cert(const std::vector<std::string>& args) {
+static void cmd_issue_cert() {
     std::string issuer_priv_path;
     std::string subject_pub_path;
     std::string out_path = "certs/cert.cert487";
@@ -251,7 +251,7 @@ int main(int argc, char** argv) {
         std::string cmd = args[0];
         std::vector<std::string> rest(args.begin()+1, args.end());
         if (cmd == "keygen") cmd_keygen(rest);
-        else if (cmd == "issue-cert") cmd_issue_cert(rest);
+        else if (cmd == "issue-cert") cmd_issue_cert();
         else if (cmd == "verify-cert") cmd_verify_cert(rest);
         else if (cmd == "gen-crl") cmd_gen_crl();
         else if (cmd == "verify-crl") cmd_verify_crl(rest);
