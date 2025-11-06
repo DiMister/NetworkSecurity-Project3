@@ -1,5 +1,5 @@
 // CBCHash implementation and small CLI demo
-#include "CBCHash.hpp"
+#include "../include/CBCHash.hpp"
 #include <iostream>
 #include <string>
 #include <vector>

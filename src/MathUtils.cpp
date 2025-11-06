@@ -3,7 +3,7 @@
 #include <cctype>
 #include <random>
 #include <set>
-#include "../include/MathUtils.h"
+#include "../include/MathUtils.hpp"
 using namespace std;
 
 vector<int> MathUtils::loadPrimes(const string &path) const {

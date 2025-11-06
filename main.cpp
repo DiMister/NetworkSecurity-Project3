@@ -2,7 +2,6 @@
 #include "./include/util.hpp"
 #include "./include/cert487.hpp"
 #include "./include/crl487.hpp"
-#include "./include/Rsa.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -21,7 +20,6 @@ static void cmd_issue_cert() {
     pki487::Rsa rsa = pki487::Rsa();
 
     // Integrated key generation step: will generate issuer/subject keypairs if paths not supplied.
-    std::string out_path = "certs/cert.cert487";
     long long not_before = 0, not_after = 0;
     long long serial = 1;
     int trust = 0;
@@ -33,6 +31,8 @@ static void cmd_issue_cert() {
     not_before = std::stoll(prompt("Not-Before (int)", std::to_string(not_before)));
     not_after = std::stoll(prompt("Not-After (int)", std::to_string(not_after)));
     trust = std::stoi(prompt("Trust level (0..7)", std::to_string(trust)));
+
+    std::string out_path = "certs/" + subject + ".cert487";
 
     if (trust < 0 || trust > 7) throw std::runtime_error("Trust level must be 0..7");
 
@@ -71,16 +71,13 @@ static void cmd_issue_cert() {
 
 static void cmd_verify_cert(const std::vector<std::string>& args) {
     std::string cert_path;
-    std::string issuer_pub_path;
     std::string time_path = PKI_TIME_FILE;
     int min_trust = -1;
     for (size_t i=0;i<args.size();++i) {
         if (args[i]=="--cert" && i+1<args.size()) cert_path=args[i+1], ++i;
-        else if (args[i]=="--issuer-pub" && i+1<args.size()) issuer_pub_path=args[i+1], ++i;
         else if (args[i]=="--min-tl" && i+1<args.size()) min_trust=std::stoi(args[i+1]), ++i;
     }
     if (cert_path.empty()) cert_path = prompt("Certificate path");
-    if (issuer_pub_path.empty()) issuer_pub_path = prompt("Issuer public key (PEM)");
 
     auto cert_txt = read_text_file(cert_path);
     auto cert = Cert487::parse(cert_txt);
@@ -119,7 +116,6 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
 
 static void cmd_gen_crl() {
     std::string issuer_priv_path;
-    std::string out_path = "crls/crl.crl487";
     std::string issuer;
     long long this_update=0, next_update=0;
     std::vector<long long> revoked;
@@ -128,6 +124,8 @@ static void cmd_gen_crl() {
     issuer = prompt("Issuer name", issuer);
     this_update = std::stoll(prompt("This-Update (int)", std::to_string(this_update)));
     next_update = std::stoll(prompt("Next-Update (int)", std::to_string(next_update)));
+
+    std::string out_path = "crls/" + issuer + ".crl487";
 
     // Revoked serials: prompt user (empty default)
     auto s = prompt("Revoked serials (comma-separated)", std::string());
