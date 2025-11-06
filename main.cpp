@@ -7,6 +7,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+#include <sstream>
 #include <filesystem>
 
 using namespace pki487;
@@ -26,26 +27,15 @@ static void cmd_issue_cert(const std::vector<std::string>& args) {
     int trust = 0;
     std::string issuer, subject;
 
-    for (size_t i=0;i<args.size();++i) {
-        if (args[i]=="--issuer-priv" && i+1<args.size()) issuer_priv_path=args[i+1], ++i;
-        else if (args[i]=="--subject-pub" && i+1<args.size()) subject_pub_path=args[i+1], ++i;
-        else if (args[i]=="--out" && i+1<args.size()) out_path=args[i+1], ++i;
-        else if (args[i]=="--serial" && i+1<args.size()) serial=std::stoll(args[i+1]), ++i;
-        else if (args[i]=="--issuer" && i+1<args.size()) issuer=args[i+1], ++i;
-        else if (args[i]=="--subject" && i+1<args.size()) subject=args[i+1], ++i;
-        else if (args[i]=="--not-before" && i+1<args.size()) not_before=std::stoll(args[i+1]), ++i;
-        else if (args[i]=="--not-after" && i+1<args.size()) not_after=std::stoll(args[i+1]), ++i;
-        else if (args[i]=="--trust" && i+1<args.size()) trust=std::stoi(args[i+1]), ++i;
-    }
-
-    if (issuer_priv_path.empty()) issuer_priv_path = prompt("Issuer private key (PEM)");
-    if (subject_pub_path.empty()) subject_pub_path = prompt("Subject public key (PEM)");
-    if (issuer.empty()) issuer = prompt("Issuer name");
-    if (subject.empty()) subject = prompt("Subject name");
-    if (serial==1) serial = std::stoll(prompt("Serial", "1"));
-    if (not_before==0) not_before = std::stoll(prompt("Not-Before (int)", "0"));
-    if (not_after==0) not_after = std::stoll(prompt("Not-After (int)", "100000"));
-    if (trust==0) trust = std::stoi(prompt("Trust level (0..7)", "0"));
+    // Always prompt the user for these values (use current values as defaults)
+    issuer_priv_path = prompt("Issuer private key (PEM)", issuer_priv_path);
+    subject_pub_path = prompt("Subject public key (PEM)", subject_pub_path);
+    issuer = prompt("Issuer name", issuer);
+    subject = prompt("Subject name", subject);
+    serial = std::stoll(prompt("Serial", std::to_string(serial)));
+    not_before = std::stoll(prompt("Not-Before (int)", std::to_string(not_before)));
+    not_after = std::stoll(prompt("Not-After (int)", std::to_string(not_after)));
+    trust = std::stoi(prompt("Trust level (0..7)", std::to_string(trust)));
 
     if (trust < 0 || trust > 7) throw std::runtime_error("Trust level must be 0..7");
 
@@ -124,37 +114,24 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
     }
 }
 
-static void cmd_gen_crl(const std::vector<std::string>& args) {
+static void cmd_gen_crl() {
     std::string issuer_priv_path;
     std::string out_path = "crls/crl.crl487";
     std::string issuer;
     long long this_update=0, next_update=0;
     std::vector<long long> revoked;
 
-    for (size_t i=0;i<args.size();++i) {
-        if (args[i]=="--issuer-priv" && i+1<args.size()) issuer_priv_path=args[i+1], ++i;
-        else if (args[i]=="--out" && i+1<args.size()) out_path=args[i+1], ++i;
-        else if (args[i]=="--issuer" && i+1<args.size()) issuer=args[i+1], ++i;
-        else if (args[i]=="--this-update" && i+1<args.size()) this_update=std::stoll(args[i+1]), ++i;
-        else if (args[i]=="--next-update" && i+1<args.size()) next_update=std::stoll(args[i+1]), ++i;
-        else if (args[i]=="--revoked" && i+1<args.size()) {
-            for (auto &s : split(args[i+1], ',', false)) {
-                auto t = trim(s);
-                if (!t.empty()) revoked.push_back(std::stoll(t));
-            }
-            ++i;
-        }
-    }
+    // Always prompt the user for these values (no command-line args parsed here)
+    issuer_priv_path = prompt("Issuer private key (PEM)", issuer_priv_path);
+    issuer = prompt("Issuer name", issuer);
+    this_update = std::stoll(prompt("This-Update (int)", std::to_string(this_update)));
+    next_update = std::stoll(prompt("Next-Update (int)", std::to_string(next_update)));
 
-    if (issuer_priv_path.empty()) issuer_priv_path = prompt("Issuer private key (PEM)");
-    if (issuer.empty()) issuer = prompt("Issuer name");
-    if (this_update==0) this_update = std::stoll(prompt("This-Update (int)", "0"));
-    if (next_update==0) next_update = std::stoll(prompt("Next-Update (int)", "100000"));
-    if (revoked.empty()) {
-        auto s = prompt("Revoked serials (comma-separated)");
-        for (auto &x : split(s, ',', false)) {
-            auto t = trim(x); if (!t.empty()) revoked.push_back(std::stoll(t));
-        }
+    // Revoked serials: prompt user (empty default)
+    auto s = prompt("Revoked serials (comma-separated)", std::string());
+    revoked.clear();
+    for (auto &x : split(s, ',', false)) {
+        auto t = trim(x); if (!t.empty()) revoked.push_back(std::stoll(t));
     }
 
     auto issuer_priv = load_private_key_pem(issuer_priv_path);
@@ -265,7 +242,7 @@ int main(int argc, char** argv) {
         if (cmd == "keygen") cmd_keygen(rest);
         else if (cmd == "issue-cert") cmd_issue_cert(rest);
         else if (cmd == "verify-cert") cmd_verify_cert(rest);
-        else if (cmd == "gen-crl") cmd_gen_crl(rest);
+        else if (cmd == "gen-crl") cmd_gen_crl();
         else if (cmd == "verify-crl") cmd_verify_crl(rest);
         else if (cmd == "is-revoked") cmd_is_revoked(rest);
         else if (cmd == "pki-time") cmd_pki_time(rest);
