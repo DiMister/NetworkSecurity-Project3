@@ -205,7 +205,7 @@ int main(int argc, char** argv) {
             std::cout << "pki487 <command> [options]\n";
             std::cout << "Commands:\n";
         // keygen removed; issue-cert now performs key generation automatically.
-            std::cout << "  issue-cert --issuer-priv file --subject-pub file [--out file] [--issuer name] [--subject name] [--serial n] [--not-before t] [--not-after t] [--trust 0..7]\n";
+            std::cout << "  issue-cert [--issuer name] [--subject name] [--serial n] [--not-before t] [--not-after t] [--trust 0..7]\n";
             std::cout << "  verify-cert --cert file --issuer-pub file [--pki-time file] [--min-tl n]\n";
             std::cout << "  gen-crl --issuer-priv file [--issuer name] [--this-update t] [--next-update t] [--revoked a,b,c] [--out file]\n";
             std::cout << "  verify-crl --crl file --issuer-pub file [--pki-time file]\n";
