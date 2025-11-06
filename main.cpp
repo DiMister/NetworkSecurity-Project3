@@ -1,9 +1,8 @@
-#include "crypto.hpp"
-#include "io.hpp"
-#include "util.hpp"
-#include "cert487.hpp"
-#include "crl487.hpp"
-#include "CBCHash.hpp"
+#include "./include/io.hpp"
+#include "./include/util.hpp"
+#include "./include/cert487.hpp"
+#include "./include/crl487.hpp"
+#include "./include/Rsa.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -15,18 +14,8 @@ using namespace pki487;
 
 const std::string PKI_TIME_FILE = "pki_time.txt";
 
-static void cmd_keygen(const std::vector<std::string>& args) {
-    std::string out = "keys/ca";
-    int bits = 2048;
-    for (size_t i=0;i<args.size();++i) {
-        if (args[i] == "--out" && i+1<args.size()) out = args[i+1], ++i;
-        else if (args[i] == "--bits" && i+1<args.size()) bits = std::stoi(args[i+1]), ++i;
-    }
-    ensure_dir("keys");
-    auto kp = generate_rsa_key(bits);
-    save_private_key_pem(kp, out + "_priv.pem");
-    save_public_key_pem(kp, out + "_pub.pem");
-    std::cout << "Generated keypair: " << out << "_[priv|pub].pem\n";
+static void Keygen(const std::vector<std::string>& args) {
+    Rsa rsa = Rsa();
 }
 
 static void cmd_issue_cert() {
