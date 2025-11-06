@@ -3,31 +3,43 @@
 #include "./include/cert487.hpp"
 #include "./include/crl487.hpp"
 #include "./include/Rsa.hpp"
+#include "./include/crypto.hpp"
 
 #include <iostream>
 #include <stdexcept>
 #include <vector>
 #include <sstream>
 #include <filesystem>
+#include "include/CBCHash.hpp"
 
 using namespace pki487;
 
 const std::string PKI_TIME_FILE = "pki_time.txt";
 
-static void Keygen(const std::vector<std::string>& args) {
-    Rsa rsa = Rsa();
-}
+// Key generation is now integrated into certificate issuance; we keep no standalone keygen.
 
-static void cmd_issue_cert() {
-    std::string issuer_priv_path;
-    std::string subject_pub_path;
+static void cmd_issue_cert(const std::vector<std::string>& cli_args) {
+    Rsa rsa = new Rsa();
+
+    // Integrated key generation step: will generate issuer/subject keypairs if paths not supplied.
     std::string out_path = "certs/cert.cert487";
     long long not_before = 0, not_after = 0;
     long long serial = 1;
     int trust = 0;
     std::string issuer, subject;
 
-    // Always prompt the user for these values (use current values as defaults)
+    // First parse any provided CLI arguments (so we don't overwrite user-provided paths by generating new ones unnecessarily)
+    for (size_t i=0;i<cli_args.size();++i) {
+        if (cli_args[i]=="--out" && i+1<cli_args.size()) out_path=cli_args[i+1], ++i;
+        else if (cli_args[i]=="--serial" && i+1<cli_args.size()) serial=std::stoll(cli_args[i+1]), ++i;
+        else if (cli_args[i]=="--issuer" && i+1<cli_args.size()) issuer=cli_args[i+1], ++i;
+        else if (cli_args[i]=="--subject" && i+1<cli_args.size()) subject=cli_args[i+1], ++i;
+        else if (cli_args[i]=="--not-before" && i+1<cli_args.size()) not_before=std::stoll(cli_args[i+1]), ++i;
+        else if (cli_args[i]=="--not-after" && i+1<cli_args.size()) not_after=std::stoll(cli_args[i+1]), ++i;
+        else if (cli_args[i]=="--trust" && i+1<cli_args.size()) trust=std::stoi(cli_args[i+1]), ++i;
+    }
+
+    // Prompt for any remaining fields
     issuer_priv_path = prompt("Issuer private key (PEM)", issuer_priv_path);
     subject_pub_path = prompt("Subject public key (PEM)", subject_pub_path);
     issuer = prompt("Issuer name", issuer);
@@ -39,9 +51,6 @@ static void cmd_issue_cert() {
 
     if (trust < 0 || trust > 7) throw std::runtime_error("Trust level must be 0..7");
 
-    auto issuer_priv = load_private_key_pem(issuer_priv_path);
-    std::string subject_pub_pem = read_text_file(subject_pub_path);
-
     Cert487 cert;
     cert.version = 1;
     cert.signature_algo = "S-DES-CBC-8";
@@ -51,7 +60,7 @@ static void cmd_issue_cert() {
     cert.not_before = not_before;
     cert.not_after = not_after;
     cert.trust_level = trust;
-    cert.subject_pubkey_pem = subject_pub_pem;
+    cert.subject_pubkey_pem = ;
 
     std::string tbs = cert.serialize_tbs();
     // Compute 8-bit CBC hash over TBS using S-DES CBC
@@ -90,14 +99,8 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
     auto sig = base64_decode(cert.signature_b64);
 
     bool sig_ok = false;
-    if (cert.signature_algo == "S-DES-CBC-8") {
-        CBCHash hasher;
-        std::vector<std::bitset<8>> blocks;
-        blocks.reserve(tbs.size());
-        for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
-        auto h = hasher.hash(blocks);
-        std::vector<unsigned char> expected = { static_cast<unsigned char>(h.to_ulong()) };
-        sig_ok = (sig == expected);
+    if (cert.signature_algo == "SHA256withRSA") {
+        sig_ok = verify_sha256_rsa(pub.get(), tbs, sig);
     }
     long long now = read_pki_time(time_path);
     bool time_ok = cert_is_time_valid(cert, now);
@@ -178,14 +181,8 @@ static void cmd_verify_crl(const std::vector<std::string>& args) {
     auto sig = base64_decode(crl.signature_b64);
 
     bool sig_ok = false;
-    if (crl.signature_algo == "S-DES-CBC-8") {
-        CBCHash hasher;
-        std::vector<std::bitset<8>> blocks;
-        blocks.reserve(tbs.size());
-        for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
-        auto h = hasher.hash(blocks);
-        std::vector<unsigned char> expected = { static_cast<unsigned char>(h.to_ulong()) };
-        sig_ok = (sig == expected);
+    if (crl.signature_algo == "SHA256withRSA") {
+        sig_ok = verify_sha256_rsa(pub.get(), tbs, sig);
     }
     long long now = read_pki_time(time_path);
     bool time_ok = crl_time_valid(crl, now);
@@ -228,7 +225,7 @@ int main(int argc, char** argv) {
         if (args.empty()) {
             std::cout << "pki487 <command> [options]\n";
             std::cout << "Commands:\n";
-            std::cout << "  keygen [--out pathPrefix] [--bits 2048]\n";
+        // keygen removed; issue-cert now performs key generation automatically.
             std::cout << "  issue-cert --issuer-priv file --subject-pub file [--out file] [--issuer name] [--subject name] [--serial n] [--not-before t] [--not-after t] [--trust 0..7]\n";
             std::cout << "  verify-cert --cert file --issuer-pub file [--pki-time file] [--min-tl n]\n";
             std::cout << "  gen-crl --issuer-priv file [--issuer name] [--this-update t] [--next-update t] [--revoked a,b,c] [--out file]\n";
@@ -239,8 +236,7 @@ int main(int argc, char** argv) {
         }
         std::string cmd = args[0];
         std::vector<std::string> rest(args.begin()+1, args.end());
-        if (cmd == "keygen") cmd_keygen(rest);
-        else if (cmd == "issue-cert") cmd_issue_cert();
+    if (cmd == "issue-cert") cmd_issue_cert(rest);
         else if (cmd == "verify-cert") cmd_verify_cert(rest);
         else if (cmd == "gen-crl") cmd_gen_crl();
         else if (cmd == "verify-crl") cmd_verify_crl(rest);
