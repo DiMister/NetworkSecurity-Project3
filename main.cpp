@@ -120,7 +120,7 @@ static void cmd_gen_crl() {
     long long this_update=0, next_update=0;
     std::vector<long long> revoked;
 
-    // Always prompt the user for these values (no command-line args parsed here)
+    // Prompt the user for these values
     issuer = prompt("Issuer name", issuer);
     this_update = std::stoll(prompt("This-Update (int)", std::to_string(this_update)));
     next_update = std::stoll(prompt("Next-Update (int)", std::to_string(next_update)));
@@ -134,6 +134,13 @@ static void cmd_gen_crl() {
         auto t = trim(x); if (!t.empty()) revoked.push_back(std::stoll(t));
     }
 
+    // Ask for issuer private key details (enter N and private exponent). We only use exponent to derive S-DES key.
+    std::string issuer_priv_n_str = prompt("Issuer private N (int, numeric)", std::string());
+    std::string issuer_priv_exp_str = prompt("Issuer private exponent (int)", std::string());
+    if (issuer_priv_n_str.empty() || issuer_priv_exp_str.empty()) throw std::runtime_error("Issuer private key details required to sign CRL");
+    uint32_t issuer_priv_n = static_cast<uint32_t>(std::stoul(issuer_priv_n_str));
+    uint32_t issuer_priv_exp = static_cast<uint32_t>(std::stoul(issuer_priv_exp_str));
+
     Crl487 crl;
     crl.version = 1;
     crl.signature_algo = "S-DES-CBC-8";
@@ -143,10 +150,9 @@ static void cmd_gen_crl() {
     crl.revoked_serials = revoked;
 
     std::string tbs = crl.serialize_tbs();
-    // Derive key for CRL from issuer private key (generate/obtain one locally here)
-    pki487::Rsa rsa_local = pki487::Rsa();
+    // Derive key for CRL from issuer private exponent (low 10 bits)
     CBCHash hasher;
-    std::bitset<10> crl_key(static_cast<unsigned long long>(rsa_local.privateKey.exponent % 1024u));
+    std::bitset<10> crl_key(static_cast<unsigned long long>(issuer_priv_exp % 1024u));
     hasher.setKey(crl_key);
     std::vector<std::bitset<8>> blocks;
     blocks.reserve(tbs.size());
@@ -178,12 +184,14 @@ static void cmd_verify_crl(const std::vector<std::string>& args) {
     bool sig_ok = false;
     if (crl.signature_algo == "S-DES-CBC-8") {
         CBCHash hasher;
-        // Prompt for issuer public exponent so verifier can derive same S-DES key
-        std::string exp_str = prompt("Issuer public exponent (int)", std::string());
-        if (exp_str.empty()) throw std::runtime_error("Issuer public exponent required for CRL verification");
-        uint32_t issuer_pub_exp = static_cast<uint32_t>(std::stoul(exp_str));
-        std::bitset<10> verify_key(static_cast<unsigned long long>(issuer_pub_exp % 1024u));
-        hasher.setKey(verify_key);
+    // Prompt for issuer public key details (N and exponent). We only use exponent to derive S-DES key
+    std::string issuer_pub_n_str = prompt("Issuer public N (int, numeric)", std::string());
+    std::string issuer_pub_exp_str = prompt("Issuer public exponent (int)", std::string());
+    if (issuer_pub_n_str.empty() || issuer_pub_exp_str.empty()) throw std::runtime_error("Issuer public key details required for CRL verification");
+    uint32_t issuer_pub_n = static_cast<uint32_t>(std::stoul(issuer_pub_n_str));
+    uint32_t issuer_pub_exp = static_cast<uint32_t>(std::stoul(issuer_pub_exp_str));
+    std::bitset<10> verify_key(static_cast<unsigned long long>(issuer_pub_exp % 1024u));
+    hasher.setKey(verify_key);
         std::vector<std::bitset<8>> blocks;
         blocks.reserve(tbs.size());
         for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
@@ -234,9 +242,9 @@ int main(int argc, char** argv) {
             std::cout << "pki487 <command> [options]\n";
             std::cout << "Commands:\n";
         // keygen removed; issue-cert now performs key generation automatically.
-            std::cout << "  issue-cert [--issuer name] [--subject name] [--serial n] [--not-before t] [--not-after t] [--trust 0..7]\n";
+            std::cout << "  issue-cert\n";
             std::cout << "  verify-cert --cert file --issuer-pub file [--pki-time file] [--min-tl n]\n";
-            std::cout << "  gen-crl --issuer-priv file [--issuer name] [--this-update t] [--next-update t] [--revoked a,b,c] [--out file]\n";
+            std::cout << "  gen-crl\n";
             std::cout << "  verify-crl --crl file --issuer-pub file [--pki-time file]\n";
             std::cout << "  is-revoked --crl file --serial n\n";
             std::cout << "  pki-time show|set <int>\n";
