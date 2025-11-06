@@ -18,7 +18,7 @@ Prerequisites:
 
 ```bash
 g++ -std=c++17 -O2 -I include \
-  src/crypto.cpp src/io.cpp src/util.cpp src/cert487.cpp src/crl487.cpp src/main.cpp \
+  src/io.cpp src/util.cpp src/cert487.cpp src/crl487.cpp main.cpp \
   -o pki487
 ```
 
@@ -30,9 +30,7 @@ Run:
 ### Windows (MinGW-w64)
 
 ```powershell
-g++ -std=c++17 -O2 -I include `
-  src/crypto.cpp src/io.cpp src/util.cpp src/cert487.cpp src/crl487.cpp src/main.cpp `
-  -o pki487.exe
+g++ -std=c++17 -O2 -I include src/io.cpp src/util.cpp src/cert487.cpp src/crl487.cpp src/SDESModes.cpp src/SDES.cpp src/MathUtils.cpp src/Rsa.cpp src/encoding.cpp src/CBCHash.cpp main.cpp -o pki487.exe
 ```
 
 Run:
@@ -50,18 +48,17 @@ Set PKI system time:
 
 Issue cert (auto keygen if not supplied paths):
 ```bash
-./pki487 issue-cert --issuer "Demo CA" --subject "Alice" --serial 42 \
-  --not-before 0 --not-after 1000 --trust 5
+./pki487 issue-cert 
 ```
 
 Verify cert:
 ```bash
-./pki487 verify-cert --cert certs/Alice.cert487 --issuer-pub keys/issuer_pub.pem --min-tl 3
+./pki487 verify-cert --cert certs/Alice.cert487 --min-tl 3
 ```
 
 Generate CRL:
 ```bash
-./pki487 gen-crl --issuer "Demo CA" --this-update 0 --next-update 1000 --revoked 42
+./pki487 gen-crl
 ```
 
 Verify CRL:

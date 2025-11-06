@@ -1,6 +1,6 @@
-#include "crl487.hpp"
-#include "io.hpp"
-#include "encoding.hpp" // hex helpers
+#include "../include/crl487.hpp"
+#include "../include/io.hpp"
+#include "../include/encoding.hpp" // hex helpers
 #include <bitset>
 
 #include <sstream>

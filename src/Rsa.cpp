@@ -1,7 +1,7 @@
 #include <cstdint>
 #include <iostream>
 #include "../include/Rsa.hpp"
-#include "../include/MathUtils.h"
+#include "../include/MathUtils.hpp"
 
 namespace pki487 {
 Rsa::Rsa() {
@@ -17,7 +17,7 @@ std::pair<uint32_t, uint32_t> Rsa::PickPrimes() {
 
     if (primes.size() < 2) {
         std::cerr << "Not enough primes in primes.csv\n";
-        return;
+        return {};
     }
 
     // Generate RSA keypair for client (small primes from CSV)

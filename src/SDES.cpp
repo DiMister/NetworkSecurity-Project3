@@ -1,4 +1,4 @@
-#include "SDES.h"
+#include "../include/SDES.hpp"
 #include <iostream>
 #include <fstream>
 
