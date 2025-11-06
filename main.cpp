@@ -55,7 +55,9 @@ static void cmd_issue_cert() {
     for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
     auto h = hasher.hash(blocks);
     std::vector<unsigned char> sig = { static_cast<unsigned char>(h.to_ulong()) };
-    cert.signature_b64 = base64_encode(sig);
+    // store signature bytes into cert.signature vector (no base64)
+    cert.signature.clear();
+    for (unsigned char b : sig) cert.signature.emplace_back(std::bitset<8>(b));
 
     ensure_dir("certs");
     write_text_file(out_path, cert.serialize_full());
@@ -80,7 +82,7 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
     auto pub = cert.subject_pubkey_pem;
 
     std::string tbs = cert.serialize_tbs();
-    auto sig = base64_decode(cert.signature_b64);
+    auto sig = cert.signature_bytes();
 
     bool sig_ok = false;
     if (cert.signature_algo == "S-DES-CBC-8") {
@@ -141,7 +143,7 @@ static void cmd_gen_crl() {
     for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
     auto h = hasher.hash(blocks);
     std::vector<unsigned char> sig = { static_cast<unsigned char>(h.to_ulong()) };
-    crl.signature_b64 = base64_encode(sig);
+    crl.signature.clear(); for (unsigned char b : sig) crl.signature.emplace_back(std::bitset<8>(b));
 
     ensure_dir("crls");
     write_text_file(out_path, crl.serialize_full());
@@ -161,7 +163,7 @@ static void cmd_verify_crl(const std::vector<std::string>& args) {
     auto crl = Crl487::parse(crl_txt);
 
     std::string tbs = crl.serialize_tbs();
-    auto sig = base64_decode(crl.signature_b64);
+    auto sig = crl.signature_bytes();
 
     bool sig_ok = false;
     if (crl.signature_algo == "S-DES-CBC-8") {

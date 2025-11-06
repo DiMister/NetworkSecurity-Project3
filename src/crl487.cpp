@@ -1,5 +1,7 @@
 #include "crl487.hpp"
 #include "io.hpp"
+#include "encoding.hpp" // hex helpers
+#include <bitset>
 
 #include <sstream>
 #include <stdexcept>
@@ -33,7 +35,7 @@ std::string Crl487::serialize_tbs() const {
 std::string Crl487::serialize_full() const {
     std::ostringstream ss;
     ss << serialize_tbs();
-    ss << field("SIGNATURE", signature_b64);
+    ss << field("SIGNATURE", hex_encode(signature_bytes()));
     ss << "-----END CRL487-----\n";
     return ss.str();
 }
@@ -57,7 +59,10 @@ Crl487 Crl487::parse(const std::string& text) {
         std::string tmp = sig_line.substr(colon+1);
         size_t p = 0; while (p < tmp.size() && (tmp[p] == ' ' || tmp[p] == '\t')) ++p;
         tmp = tmp.substr(p);
-        c.signature_b64 = trim(tmp);
+    auto sig_bytes = hex_decode(trim(tmp));
+        c.signature.clear();
+        c.signature.reserve(sig_bytes.size());
+        for (unsigned char b : sig_bytes) c.signature.emplace_back(std::bitset<8>(b));
     }
 
     auto end = canon.find("-----END CRL487-----\n", sig_end_line);
@@ -94,6 +99,13 @@ bool crl_time_valid(const Crl487& crl, long long t) {
 
 bool crl_is_revoked(const Crl487& crl, long long serial) {
     return std::find(crl.revoked_serials.begin(), crl.revoked_serials.end(), serial) != crl.revoked_serials.end();
+}
+
+std::vector<unsigned char> Crl487::signature_bytes() const {
+    std::vector<unsigned char> out;
+    out.reserve(signature.size());
+    for (const auto &bs : signature) out.push_back(static_cast<unsigned char>(bs.to_ulong()));
+    return out;
 }
 
 } // namespace pki487

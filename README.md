@@ -39,7 +39,7 @@ SUBJECT-PUBKEY-PEM: BEGIN
 <PEM public key>
 SUBJECT-PUBKEY-PEM: END
 -----END TBS-----
-SIGNATURE: <base64 signature over the TBS block above>
+SIGNATURE: <hex signature over the TBS block above>
 -----END CERT487-----
 ```
 
@@ -54,7 +54,7 @@ THIS-UPDATE: <int>
 NEXT-UPDATE: <int>
 REVOKED-SERIALS: 1,2,3
 -----END TBS-----
-SIGNATURE: <base64 signature over the TBS block above>
+SIGNATURE: <hex signature over the TBS block above>
 -----END CRL487-----
 ```
 
@@ -88,6 +88,7 @@ SIGNATURE: <base64 signature over the TBS block above>
 If you edit any field in a CERT487 or CRL487 file, signature verification will fail (expected).
 
 ## Notes
+
 - Trust Level is enforced at verification via `--min-tl`. Range is 0..7, with 7 highest.
 - Time validity checks use integer times from `pki_time.txt`.
 - Canonicalization normalizes newlines and strips trailing whitespace on each line before signing and verifying, so editors that change line endings won't break signatures unintentionally.

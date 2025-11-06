@@ -1,5 +1,7 @@
 #include "cert487.hpp"
 #include "io.hpp"
+#include "encoding.hpp" // hex helpers
+#include <bitset>
 
 #include <sstream>
 #include <stdexcept>
@@ -34,7 +36,9 @@ std::string Cert487::serialize_tbs() const {
 std::string Cert487::serialize_full() const {
     std::ostringstream ss;
     ss << serialize_tbs();
-    ss << field("SIGNATURE", signature_b64);
+    // Encode signature bytes as hex for on-disk representation
+    auto sig_bytes = signature_bytes();
+    ss << field("SIGNATURE", hex_encode(sig_bytes));
     ss << "-----END CERT487-----\n";
     return ss.str();
 }
@@ -62,7 +66,11 @@ Cert487 Cert487::parse(const std::string& text) {
         // trim leading spaces
         size_t p = 0; while (p < tmp.size() && (tmp[p] == ' ' || tmp[p] == '\t')) ++p;
         tmp = tmp.substr(p);
-        c.signature_b64 = trim(tmp);
+    // tmp now contains hex string of signature bytes
+    auto sig_bytes = hex_decode(trim(tmp));
+        c.signature.clear();
+        c.signature.reserve(sig_bytes.size());
+        for (unsigned char b : sig_bytes) c.signature.emplace_back(std::bitset<8>(b));
     }
 
     auto cert_end = canon.find("-----END CERT487-----\n", sig_end_line);
@@ -123,6 +131,15 @@ Cert487 Cert487::parse(const std::string& text) {
 
 bool cert_is_time_valid(const Cert487& c, long long t) {
     return t >= c.not_before && t <= c.not_after;
+}
+
+std::vector<unsigned char> Cert487::signature_bytes() const {
+    std::vector<unsigned char> out;
+    out.reserve(signature.size());
+    for (const auto &bs : signature) {
+        out.push_back(static_cast<unsigned char>(bs.to_ulong()));
+    }
+    return out;
 }
 
 } // namespace pki487
