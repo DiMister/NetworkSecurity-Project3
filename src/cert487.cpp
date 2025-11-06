@@ -22,11 +22,11 @@ std::string Cert487::serialize_tbs() const {
     ss << field("NOT-BEFORE", std::to_string(not_before));
     ss << field("NOT-AFTER", std::to_string(not_after));
     ss << field("TRUST-LEVEL", std::to_string(trust_level));
-    ss << "SUBJECT-PUBKEY-PEM: BEGIN\n";
-    std::string pem = subject_pubkey_pem;
-    if (!pem.empty() && pem.back() != '\n') pem.push_back('\n');
-    ss << pem;
-    ss << "SUBJECT-PUBKEY-PEM: END\n";
+    // Serialize the subject public key (numeric keypair) in a small block
+    ss << "SUBJECT-PUBKEY: BEGIN\n";
+    ss << field("N", std::to_string(subject_pubkey_pem.n));
+    ss << field("EXPONENT", std::to_string(subject_pubkey_pem.exponent));
+    ss << "SUBJECT-PUBKEY: END\n";
     ss << "-----END TBS-----\n";
     return canonicalize_newlines(ss.str());
 }
@@ -91,15 +91,29 @@ Cert487 Cert487::parse(const std::string& text) {
     c.not_after = std::stoll(get_value("NOT-AFTER"));
     c.trust_level = std::stoi(get_value("TRUST-LEVEL"));
 
-    // Subject pubkey PEM block between markers
-    auto pem_begin_key = std::string("SUBJECT-PUBKEY-PEM: BEGIN\n");
-    auto pem_end_key = std::string("SUBJECT-PUBKEY-PEM: END\n");
+    // Subject public key block between markers (numeric keypair)
+    auto pem_begin_key = std::string("SUBJECT-PUBKEY: BEGIN\n");
+    auto pem_end_key = std::string("SUBJECT-PUBKEY: END\n");
     auto pb = rest.find(pem_begin_key);
-    if (pb == std::string::npos) throw std::runtime_error("Missing SUBJECT-PUBKEY-PEM: BEGIN");
+    if (pb == std::string::npos) throw std::runtime_error("Missing SUBJECT-PUBKEY: BEGIN");
     pb += pem_begin_key.size();
     auto pe = rest.find(pem_end_key, pb);
-    if (pe == std::string::npos) throw std::runtime_error("Missing SUBJECT-PUBKEY-PEM: END");
-    c.subject_pubkey_pem = rest.substr(pb, pe - pb);
+    if (pe == std::string::npos) throw std::runtime_error("Missing SUBJECT-PUBKEY: END");
+    // Parse the two fields N and EXPONENT inside the block
+    {
+        std::string keyblock = rest.substr(pb, pe - pb);
+        auto get_kv = [&](const std::string& key)->std::string {
+            auto pos = keyblock.find(key + ": ");
+            if (pos == std::string::npos) throw std::runtime_error("Missing key field: " + key);
+            auto line_end = keyblock.find('\n', pos);
+            if (line_end == std::string::npos) line_end = keyblock.size();
+            return keyblock.substr(pos + key.size() + 2, line_end - (pos + key.size() + 2));
+        };
+        auto s_n = get_kv("N");
+        auto s_exp = get_kv("EXPONENT");
+        c.subject_pubkey_pem.n = static_cast<uint32_t>(std::stoul(s_n));
+        c.subject_pubkey_pem.exponent = static_cast<uint32_t>(std::stoul(s_exp));
+    }
 
     // Validate trust level range
     if (c.trust_level < 0 || c.trust_level > 7) throw std::runtime_error("TRUST-LEVEL out of range (0..7)");

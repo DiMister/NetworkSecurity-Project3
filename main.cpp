@@ -18,7 +18,7 @@ const std::string PKI_TIME_FILE = "pki_time.txt";
 // Key generation is now integrated into certificate issuance; we keep no standalone keygen.
 
 static void cmd_issue_cert() {
-    Rsa rsa = Rsa();
+    pki487::Rsa rsa = pki487::Rsa();
 
     // Integrated key generation step: will generate issuer/subject keypairs if paths not supplied.
     std::string out_path = "certs/cert.cert487";
@@ -70,7 +70,6 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
     for (size_t i=0;i<args.size();++i) {
         if (args[i]=="--cert" && i+1<args.size()) cert_path=args[i+1], ++i;
         else if (args[i]=="--issuer-pub" && i+1<args.size()) issuer_pub_path=args[i+1], ++i;
-        else if (args[i]=="--pki-time" && i+1<args.size()) time_path=args[i+1], ++i;
         else if (args[i]=="--min-tl" && i+1<args.size()) min_trust=std::stoi(args[i+1]), ++i;
     }
     if (cert_path.empty()) cert_path = prompt("Certificate path");
@@ -85,7 +84,13 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
 
     bool sig_ok = false;
     if (cert.signature_algo == "S-DES-CBC-8") {
-        sig_ok = verify_sha256_rsa(pub.get(), tbs, sig);
+        CBCHash hasher;
+        std::vector<std::bitset<8>> blocks;
+        blocks.reserve(tbs.size());
+        for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
+        auto h = hasher.hash(blocks);
+        std::vector<unsigned char> expected = { static_cast<unsigned char>(h.to_ulong()) };
+        sig_ok = (sig == expected);
     }
     long long now = read_pki_time(time_path);
     bool time_ok = cert_is_time_valid(cert, now);
@@ -160,7 +165,13 @@ static void cmd_verify_crl(const std::vector<std::string>& args) {
 
     bool sig_ok = false;
     if (crl.signature_algo == "S-DES-CBC-8") {
-
+        CBCHash hasher;
+        std::vector<std::bitset<8>> blocks;
+        blocks.reserve(tbs.size());
+        for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
+        auto h = hasher.hash(blocks);
+        std::vector<unsigned char> expected = { static_cast<unsigned char>(h.to_ulong()) };
+        sig_ok = (sig == expected);
     }
 
     long long now = read_pki_time(time_path);
