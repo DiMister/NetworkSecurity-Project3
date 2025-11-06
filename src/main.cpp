@@ -11,6 +11,8 @@
 
 using namespace pki487;
 
+const std::string PKI_TIME_FILE = "pki_time.txt";
+
 static void cmd_keygen(const std::vector<std::string>& args) {
     std::string out = "keys/ca";
     int bits = 2048;
@@ -83,7 +85,7 @@ static void cmd_issue_cert(const std::vector<std::string>& args) {
 static void cmd_verify_cert(const std::vector<std::string>& args) {
     std::string cert_path;
     std::string issuer_pub_path;
-    std::string time_path = "pki_time.txt";
+    std::string time_path = PKI_TIME_FILE;
     int min_trust = -1;
     for (size_t i=0;i<args.size();++i) {
         if (args[i]=="--cert" && i+1<args.size()) cert_path=args[i+1], ++i;
@@ -172,7 +174,7 @@ static void cmd_gen_crl(const std::vector<std::string>& args) {
 static void cmd_verify_crl(const std::vector<std::string>& args) {
     std::string crl_path;
     std::string issuer_pub_path;
-    std::string time_path = "pki_time.txt";
+    std::string time_path = PKI_TIME_FILE;
     for (size_t i=0;i<args.size();++i) {
         if (args[i]=="--crl" && i+1<args.size()) crl_path=args[i+1], ++i;
         else if (args[i]=="--issuer-pub" && i+1<args.size()) issuer_pub_path=args[i+1], ++i;
@@ -212,7 +214,7 @@ static void cmd_is_revoked(const std::vector<std::string>& args) {
 }
 
 static void cmd_pki_time(const std::vector<std::string>& args) {
-    std::string file = "pki_time.txt";
+    std::string file = PKI_TIME_FILE;
     if (!args.empty() && args[0] == "show") {
         std::cout << read_pki_time(file) << "\n";
     } else if (!args.empty() && args[0] == "set") {
