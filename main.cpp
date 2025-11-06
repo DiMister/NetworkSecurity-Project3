@@ -112,6 +112,8 @@ static void cmd_gen_crl() {
     long long this_update=0, next_update=0;
     std::vector<long long> revoked;
 
+    pki487::Rsa rsa = pki487::Rsa();
+
     // Always prompt the user for these values (no command-line args parsed here)
     issuer = prompt("Issuer name", issuer);
     this_update = std::stoll(prompt("This-Update (int)", std::to_string(this_update)));
