@@ -3,8 +3,12 @@
 #include "../include/Rsa.hpp"
 #include "../include/MathUtils.h"
 
-void Rsa::Rsa() {
-    PickPrimes();
+namespace pki487 {
+Rsa::Rsa() {
+    auto [p,q] = PickPrimes();
+    auto [n,e,d] = GenerateKeypair(p, q);
+    publicKey = {n, e};
+    privateKey = {n, d};
 }
 
 std::pair<uint32_t, uint32_t> Rsa::PickPrimes() {
@@ -49,4 +53,5 @@ std::tuple<uint32_t, uint32_t, uint32_t> Rsa::GenerateKeypair(uint32_t p_rsa, ui
     printf("Client: computed private exponent d=%u\n", d);
 
     return {n, e, d};
+}
 }
