@@ -49,7 +49,12 @@ static void cmd_issue_cert() {
 
     std::string tbs = cert.serialize_tbs();
     // Compute 8-bit CBC hash over TBS using S-DES CBC
+    // Derive 10-bit S-DES key from issuer private exponent (use low 10 bits)
     CBCHash hasher; // default key and IV
+    // Use exponent modulo 1024 (equivalent to low 10 bits) to derive key
+    std::bitset<10> signing_key(static_cast<unsigned long long>(rsa.privateKey.exponent % 1024u));
+    hasher.setKey(signing_key);
+    hasher.setKey(std::bitset<10>("1010101010")); // example fixed key
     std::vector<std::bitset<8>> blocks;
     blocks.reserve(tbs.size());
     for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
@@ -87,6 +92,9 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
     bool sig_ok = false;
     if (cert.signature_algo == "S-DES-CBC-8") {
         CBCHash hasher;
+        // Derive S-DES key from subject public exponent (low 10 bits) so verifier can reproduce signer's key
+    std::bitset<10> verify_key(static_cast<unsigned long long>(pub.exponent % 1024u));
+        hasher.setKey(verify_key);
         std::vector<std::bitset<8>> blocks;
         blocks.reserve(tbs.size());
         for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
@@ -137,7 +145,11 @@ static void cmd_gen_crl() {
     crl.revoked_serials = revoked;
 
     std::string tbs = crl.serialize_tbs();
+    // Derive key for CRL from issuer private key (generate/obtain one locally here)
+    pki487::Rsa rsa_local = pki487::Rsa();
     CBCHash hasher;
+    std::bitset<10> crl_key(static_cast<unsigned long long>(rsa_local.privateKey.exponent % 1024u));
+    hasher.setKey(crl_key);
     std::vector<std::bitset<8>> blocks;
     blocks.reserve(tbs.size());
     for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
@@ -168,6 +180,12 @@ static void cmd_verify_crl(const std::vector<std::string>& args) {
     bool sig_ok = false;
     if (crl.signature_algo == "S-DES-CBC-8") {
         CBCHash hasher;
+        // Prompt for issuer public exponent so verifier can derive same S-DES key
+        std::string exp_str = prompt("Issuer public exponent (int)", std::string());
+        if (exp_str.empty()) throw std::runtime_error("Issuer public exponent required for CRL verification");
+        uint32_t issuer_pub_exp = static_cast<uint32_t>(std::stoul(exp_str));
+        std::bitset<10> verify_key(static_cast<unsigned long long>(issuer_pub_exp % 1024u));
+        hasher.setKey(verify_key);
         std::vector<std::bitset<8>> blocks;
         blocks.reserve(tbs.size());
         for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
