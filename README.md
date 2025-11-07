@@ -83,4 +83,12 @@ Integer 0–7 stored in TRUST-LEVEL field; `--min-tl` enforces a minimum at veri
 
 Validity checked against `pki_time.txt` (integer). Adjust with `pki-time set <int>` to force expire/valid states.
 
+-----BEGIN RSA PUBLIC KEY-----
+N: 769864357
+E: 142112703
+-----END RSA PUBLIC KEY-----
 
+-----BEGIN RSA PRIVATE KEY-----
+N: 769864357
+D: 409609311
+-----END RSA PRIVATE KEY-----
