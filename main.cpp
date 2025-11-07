@@ -48,20 +48,11 @@ static void cmd_issue_cert() {
     cert.subject_pubkey_pem = rsa.publicKey;
 
     std::string tbs = cert.serialize_tbs();
-    // Compute 8-bit CBC hash over TBS using S-DES CBC
-    // Derive 10-bit S-DES key from issuer private exponent (use low 10 bits)
-    CBCHash hasher; // default key and IV
-    // Use exponent modulo 1024 (equivalent to low 10 bits) to derive key
-    std::bitset<10> signing_key(static_cast<unsigned long long>(rsa.privateKey.exponent % 1024u));
-    hasher.setKey(signing_key);
-    std::vector<std::bitset<8>> blocks;
-    blocks.reserve(tbs.size());
-    for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
-    auto h = hasher.hash(blocks);
-    std::vector<unsigned char> sig = { static_cast<unsigned char>(h.to_ulong()) };
-    // store signature bytes into cert.signature vector (no base64)
+    // Sign the TBS using the generated RSA private key. Signature is stored as 4 big-endian bytes.
+    pki487::keypair privkp = rsa.privateKey;
+    auto sig_bytes = pki487::Rsa::sign_message(tbs, privkp);
     cert.signature.clear();
-    for (unsigned char b : sig) cert.signature.emplace_back(std::bitset<8>(b));
+    for (unsigned char b : sig_bytes) cert.signature.emplace_back(std::bitset<8>(b));
 
     ensure_dir("certs");
     write_text_file(out_path, cert.serialize_full());
@@ -87,16 +78,15 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
 
     bool sig_ok = false;
     if (cert.signature_algo == "S-DES-CBC-8") {
-        CBCHash hasher;
-        // Derive S-DES key from subject public exponent (low 10 bits) so verifier can reproduce signer's key
-    std::bitset<10> verify_key(static_cast<unsigned long long>(pub.exponent % 1024u));
-        hasher.setKey(verify_key);
-        std::vector<std::bitset<8>> blocks;
-        blocks.reserve(tbs.size());
-        for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
-        auto h = hasher.hash(blocks);
-        std::vector<unsigned char> expected = { static_cast<unsigned char>(h.to_ulong()) };
-        sig_ok = (sig == expected);
+        // Prompt for issuer public key details (N and exponent) so verifier can verify signature
+        std::string issuer_pub_n_str = prompt("Issuer public N (int, numeric)", std::string());
+        std::string issuer_pub_exp_str = prompt("Issuer public exponent (int)", std::string());
+        if (issuer_pub_n_str.empty() || issuer_pub_exp_str.empty()) throw std::runtime_error("Issuer public key details required for cert verification");
+        pki487::keypair issuer_pub;
+        issuer_pub.n = static_cast<uint32_t>(std::stoul(issuer_pub_n_str));
+        issuer_pub.exponent = static_cast<uint32_t>(std::stoul(issuer_pub_exp_str));
+
+        sig_ok = pki487::Rsa::verify_message(tbs, issuer_pub, sig);
     }
     long long now = read_pki_time(time_path);
     bool time_ok = cert_is_time_valid(cert, now);
@@ -149,16 +139,12 @@ static void cmd_gen_crl() {
     crl.revoked_serials = revoked;
 
     std::string tbs = crl.serialize_tbs();
-    // Derive key for CRL from issuer private exponent (low 10 bits)
-    CBCHash hasher;
-    std::bitset<10> crl_key(static_cast<unsigned long long>(issuer_priv_exp % 1024u));
-    hasher.setKey(crl_key);
-    std::vector<std::bitset<8>> blocks;
-    blocks.reserve(tbs.size());
-    for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
-    auto h = hasher.hash(blocks);
-    std::vector<unsigned char> sig = { static_cast<unsigned char>(h.to_ulong()) };
-    crl.signature.clear(); for (unsigned char b : sig) crl.signature.emplace_back(std::bitset<8>(b));
+    // Sign CRL TBS using issuer private key (provided interactively). Signature stored as 4 big-endian bytes.
+    pki487::keypair issuer_priv_kp;
+    issuer_priv_kp.n = issuer_priv_n;
+    issuer_priv_kp.exponent = issuer_priv_exp;
+    auto crl_sig = pki487::Rsa::sign_message(tbs, issuer_priv_kp);
+    crl.signature.clear(); for (unsigned char b : crl_sig) crl.signature.emplace_back(std::bitset<8>(b));
 
     ensure_dir("crls");
     write_text_file(out_path, crl.serialize_full());
@@ -182,21 +168,15 @@ static void cmd_verify_crl(const std::vector<std::string>& args) {
 
     bool sig_ok = false;
     if (crl.signature_algo == "S-DES-CBC-8") {
-        CBCHash hasher;
-    // Prompt for issuer public key details (N and exponent). We only use exponent to derive S-DES key
-    std::string issuer_pub_n_str = prompt("Issuer public N (int, numeric)", std::string());
-    std::string issuer_pub_exp_str = prompt("Issuer public exponent (int)", std::string());
-    if (issuer_pub_n_str.empty() || issuer_pub_exp_str.empty()) throw std::runtime_error("Issuer public key details required for CRL verification");
-        uint32_t issuer_pub_n = static_cast<uint32_t>(std::stoul(issuer_pub_n_str));
-        uint32_t issuer_pub_exp = static_cast<uint32_t>(std::stoul(issuer_pub_exp_str));
-        std::bitset<10> verify_key(static_cast<unsigned long long>(issuer_pub_exp % 1024u));
-        hasher.setKey(verify_key);
-        std::vector<std::bitset<8>> blocks;
-        blocks.reserve(tbs.size());
-        for (unsigned char c : tbs) blocks.emplace_back(std::bitset<8>(c));
-        auto h = hasher.hash(blocks);
-        std::vector<unsigned char> expected = { static_cast<unsigned char>(h.to_ulong()) };
-        sig_ok = (sig == expected);
+        // Prompt for issuer public key details (N and exponent) to verify CRL signature
+        std::string issuer_pub_n_str = prompt("Issuer public N (int, numeric)", std::string());
+        std::string issuer_pub_exp_str = prompt("Issuer public exponent (int)", std::string());
+        if (issuer_pub_n_str.empty() || issuer_pub_exp_str.empty()) throw std::runtime_error("Issuer public key details required for CRL verification");
+        pki487::keypair issuer_pub;
+        issuer_pub.n = static_cast<uint32_t>(std::stoul(issuer_pub_n_str));
+        issuer_pub.exponent = static_cast<uint32_t>(std::stoul(issuer_pub_exp_str));
+
+        sig_ok = pki487::Rsa::verify_message(tbs, issuer_pub, sig);
     }
 
     long long now = read_pki_time(time_path);
