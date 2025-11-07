@@ -40,7 +40,7 @@ Run:
 
 ### Mac (Clang)
 
-
+clang++ -std=c++17 rc/io.cpp src/util.cpp src/cert487.cpp src/crl487.cpp src/SDESModes.cpp src/SDES.cpp src/MathUtils.cpp src/Rsa.cpp src/encoding.cpp src/CBCHash.cpp main.cpp -o pki487.exe
 
 ## Usage Examples
 

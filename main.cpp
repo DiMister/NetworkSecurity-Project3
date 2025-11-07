@@ -78,13 +78,10 @@ static void cmd_verify_cert(const std::vector<std::string>& args) {
 
     bool sig_ok = false;
     if (cert.signature_algo == "S-DES-CBC-8") {
-        // Prompt for issuer public key details (N and exponent) so verifier can verify signature
-        std::string issuer_pub_n_str = prompt("Issuer public N (int, numeric)", std::string());
-        std::string issuer_pub_exp_str = prompt("Issuer public exponent (int)", std::string());
-        if (issuer_pub_n_str.empty() || issuer_pub_exp_str.empty()) throw std::runtime_error("Issuer public key details required for cert verification");
+        // Use issuer public key details from certificate to verify signature
         pki487::keypair issuer_pub;
-        issuer_pub.n = static_cast<uint32_t>(std::stoul(issuer_pub_n_str));
-        issuer_pub.exponent = static_cast<uint32_t>(std::stoul(issuer_pub_exp_str));
+        issuer_pub.n = static_cast<uint32_t>(pub.n);
+        issuer_pub.exponent = static_cast<uint32_t>(pub.exponent);
 
         sig_ok = pki487::Rsa::verify_message(tbs, issuer_pub, sig);
     }
