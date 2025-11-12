@@ -1,4 +1,4 @@
-#include "encoding.hpp"
+#include "../include/encoding.hpp"
 #include <stdexcept>
 #include <cctype>
 
